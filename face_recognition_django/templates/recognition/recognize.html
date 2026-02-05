@@ -1,0 +1,281 @@
+{% extends 'base.html' %}
+
+{% block title %}Face Recognition - Live Recognition{% endblock %}
+
+{% block extra_css %}
+<style>
+    #recognition-feed {
+        width: 100%;
+        max-width: 800px;
+        border-radius: 10px;
+        border: 3px solid #667eea;
+    }
+
+    .recognition-info {
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        padding: 15px;
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Notification Container -->
+<div id="notification-container" style="position: fixed; top: 80px; right: 20px; z-index: 9999; max-width: 400px;">
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8 mx-auto text-center">
+        <h2 class="text-white"><i class="bi bi-person-check-fill me-2"></i>Live Face Recognition</h2>
+        <p class="text-white">Real-time student identification and attendance marking</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-camera-video me-2"></i>Live Recognition Feed</h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="alert alert-info mb-4">
+                    <strong><i class="bi bi-info-circle me-2"></i>Instructions:</strong>
+                    Click "Start Recognition" to begin. The system will detect and identify faces in real-time.
+                    Attendance is marked automatically when a student is recognized.
+                </div>
+
+                <!-- Video Feed -->
+                <div id="video-container" class="position-relative mb-3" style="display: none;">
+                    <img id="recognition-feed" src="{% url 'video_feed' %}" alt="Recognition Feed" class="img-fluid">
+                </div>
+
+                <!-- Recognition Info -->
+                <div id="recognition-info" class="recognition-info" style="display: none;">
+                    <h5><i class="bi bi-person-badge me-2"></i>Last Recognized:</h5>
+                    <p id="last-person" class="mb-0 text-muted">Waiting for recognition...</p>
+                </div>
+
+                <!-- Controls -->
+                <div class="mt-4">
+                    <button id="start-btn" class="btn btn-success btn-lg me-2">
+                        <i class="bi bi-play-fill me-1"></i>Start Recognition
+                    </button>
+                    <button id="stop-btn" class="btn btn-danger btn-lg" style="display: none;">
+                        <i class="bi bi-stop-fill me-1"></i>Stop Recognition
+                    </button>
+                </div>
+
+                <div class="alert alert-warning mt-4">
+                    <strong>Note:</strong> Make sure your webcam is connected and the model has been trained before
+                    starting recognition. Attendance is automatically marked once per day for each recognized student.
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Attendance -->
+        <div class="card mt-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Today's Attendance</h5>
+            </div>
+            <div class="card-body">
+                <div id="attendance-list">
+                    <p class="text-center text-muted">Start recognition to mark attendance</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const videoContainer = document.getElementById('video-container');
+    const recognitionInfo = document.getElementById('recognition-info');
+    const recognitionFeed = document.getElementById('recognition-feed');
+    const notificationContainer = document.getElementById('notification-container');
+
+    let recognitionActive = false;
+    let pollingInterval = null;
+
+    // Function to show in-page notification
+    function showNotification(title, message, type = 'info', duration = 5000, showHomeButton = false) {
+        const notificationId = 'notif-' + Date.now();
+
+        const colors = {
+            'success': { bg: '#d4edda', border: '#28a745', icon: 'check-circle-fill', text: '#155724' },
+            'warning': { bg: '#fff3cd', border: '#ffc107', icon: 'exclamation-triangle-fill', text: '#856404' },
+            'danger': { bg: '#f8d7da', border: '#dc3545', icon: 'x-circle-fill', text: '#721c24' },
+            'info': { bg: '#d1ecf1', border: '#17a2b8', icon: 'info-circle-fill', text: '#0c5460' }
+        };
+
+        const color = colors[type] || colors['info'];
+
+        const notification = document.createElement('div');
+        notification.id = notificationId;
+        notification.className = 'alert shadow-lg mb-3';
+        notification.style.cssText = `
+        background: ${color.bg};
+        border-left: 5px solid ${color.border};
+        color: ${color.text};
+        animation: slideIn 0.3s ease-out;
+    `;
+
+        const homeButtonHtml = showHomeButton ? `
+        <div class="mt-3">
+            <a href="/" class="btn btn-sm" style="background: ${color.border}; color: white; text-decoration: none;">
+                <i class="bi bi-house-fill me-1"></i>Go to Home
+            </a>
+        </div>
+    ` : '';
+
+        notification.innerHTML = `
+        <div class="d-flex align-items-start">
+            <i class="bi bi-${color.icon} me-3" style="font-size: 1.5rem;"></i>
+            <div class="flex-grow-1">
+                <h6 class="mb-1 fw-bold">${title}</h6>
+                <div style="white-space: pre-line; font-size: 0.9rem;">${message}</div>
+                ${homeButtonHtml}
+            </div>
+            <button type="button" class="btn-close ms-3" onclick="document.getElementById('${notificationId}').remove()"></button>
+        </div>
+    `;
+
+        notificationContainer.appendChild(notification);
+
+        // Auto-remove after duration
+        if (duration > 0) {
+            setTimeout(() => {
+                const elem = document.getElementById(notificationId);
+                if (elem) {
+                    elem.style.animation = 'slideOut 0.3s ease-out';
+                    setTimeout(() => elem.remove(), 300);
+                }
+            }, duration);
+        }
+    }
+
+    // Function to check for recognition events
+    async function checkRecognitionEvents() {
+        if (!recognitionActive) return;
+
+        try {
+            const response = await fetch('/recognition/recognition-events/');
+            const data = await response.json();
+
+            if (data.events && data.events.length > 0) {
+                data.events.forEach(event => {
+                    if (event.already_marked) {
+                        // Show warning for duplicate attendance
+                        showDuplicateNotification(event);
+                    } else {
+                        // Show success notification for new attendance
+                        showSuccessNotification(event);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error checking recognition events:', error);
+        }
+    }
+
+    // Show duplicate attendance notification
+    function showDuplicateNotification(event) {
+        const message = `<strong>${event.student_name}</strong> (${event.student_id})
+
+Your attendance was already marked today!
+
+<strong>Department:</strong> ${event.department}
+<strong>Time Marked:</strong> ${event.marked_at}
+<strong>Confidence:</strong> ${event.confidence}%
+
+You can only mark attendance once per day.`;
+
+        showNotification('⚠️ Already Marked', message, 'warning', 10000, true);
+    }
+
+    // Show success notification
+    function showSuccessNotification(event) {
+        const message = `<strong>${event.student_name}</strong> (${event.student_id})
+
+<strong>Department:</strong> ${event.department}
+<strong>Confidence:</strong> ${event.confidence}%
+
+Your attendance has been recorded successfully!`;
+
+        showNotification('✅ Attendance Marked', message, 'success', 8000, true);
+    }
+
+    startBtn.addEventListener('click', function () {
+        // Show video feed
+        videoContainer.style.display = 'block';
+        recognitionInfo.style.display = 'block';
+
+        // Update button states
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+
+        recognitionActive = true;
+
+        // Force reload the video feed
+        const timestamp = new Date().getTime();
+        recognitionFeed.src = "{% url 'video_feed' %}?" + timestamp;
+
+        // Start polling for recognition events every 2 seconds
+        pollingInterval = setInterval(checkRecognitionEvents, 2000);
+
+        showNotification('Recognition Started', 'Face recognition is now active. Position yourself in front of the camera.', 'info', 3000);
+    });
+
+    stopBtn.addEventListener('click', function () {
+        // Hide video feed
+        videoContainer.style.display = 'none';
+        recognitionInfo.style.display = 'none';
+
+        // Update button states
+        startBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'none';
+
+        recognitionActive = false;
+
+        // Stop video feed
+        recognitionFeed.src = '';
+
+        // Stop polling
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+
+        showNotification('Recognition Stopped', 'Face recognition has been stopped.', 'info', 3000);
+    });
+</script>
+
+<style>
+    @keyframes slideIn {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        to {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,252 @@
+{% extends 'base.html' %}
+
+{% block title %}Capture Photos - {{ student.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    #webcam-video {
+        width: 100%;
+        max-width: 640px;
+        border-radius: 10px;
+        border: 3px solid #667eea;
+        transform: scaleX(-1);
+        /* Mirror the video */
+    }
+
+    #capture-status {
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+
+    .progress {
+        height: 30px;
+        font-size: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8 mx-auto text-center">
+        <h2 class="text-white"><i class="bi bi-camera-fill me-2"></i>Capture Photo Samples</h2>
+        <p class="text-white">Capturing for: <strong>{{ student.name }}</strong> ({{ student.student_id }})</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-camera me-2"></i>Automated Photo Capture</h5>
+            </div>
+            <div class="card-body">
+                <!-- Webcam Feed -->
+                <div class="text-center mb-4">
+                    <video id="webcam-video" autoplay playsinline></video>
+                    <canvas id="capture-canvas" style="display: none;"></canvas>
+                </div>
+
+                <!-- Progress -->
+                <div class="mb-3">
+                    <div id="capture-status" class="text-center mb-2 text-primary">
+                        Click "Start Capture" to begin
+                    </div>
+                    <div class="progress">
+                        <div id="progress-bar"
+                            class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                            role="progressbar" style="width: 0%">0 / 100</div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="text-center">
+                    <button id="start-btn" class="btn btn-success btn-lg me-2">
+                        <i class="bi bi-play-fill me-1"></i>Start Capture
+                    </button>
+                    <button id="stop-btn" class="btn btn-danger btn-lg" disabled>
+                        <i class="bi bi-stop-fill me-1"></i>Stop
+                    </button>
+                </div>
+
+                <div class="alert alert-info mt-4">
+                    <strong><i class="bi bi-info-circle me-2"></i>Instructions:</strong>
+                    <ol class="mb-0">
+                        <li>Click "Allow" when your browser asks for webcam access</li>
+                        <li>Click "Start Capture" to begin</li>
+                        <li>Keep your face visible in the frame</li>
+                        <li>System will capture 100 photos automatically (takes about 10 seconds)</li>
+                        <li>Move your head slightly for better variation</li>
+                        <li>Training will start automatically after capture completes</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <a href="{% url 'student_list' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back to Students
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const video = document.getElementById('webcam-video');
+    const canvas = document.getElementById('capture-canvas');
+    const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const progressBar = document.getElementById('progress-bar');
+    const statusText = document.getElementById('capture-status');
+
+    let captureInterval = null;
+    let photoCount = 0;
+    const studentId = "{{ student.student_id }}";
+    const maxPhotos = 100;
+
+    // Initialize webcam
+    async function initWebcam() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 640, height: 480 }
+            });
+            video.srcObject = stream;
+            statusText.textContent = 'Webcam ready! Click "Start Capture"';
+            statusText.className = 'text-center mb-2 text-success';
+        } catch (error) {
+            console.error('Error accessing webcam:', error);
+            statusText.textContent = 'Error: Could not access webcam. Please check permissions.';
+            statusText.className = 'text-center mb-2 text-danger';
+        }
+    }
+
+    // Capture and save photo
+    async function capturePhoto() {
+        // Set canvas size to match video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // Draw current frame to canvas
+        ctx.drawImage(video, 0, 0);
+
+        // Convert to base64
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+        // Send to server
+        try {
+            const response = await fetch('/recognition/save-photo/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    student_id: studentId,
+                    image: imageData
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                photoCount = data.count;
+                updateProgress();
+
+                // Check if we need to train
+                if (data.should_train) {
+                    stopCapture();
+                    startTraining();
+                }
+
+                // Stop if we reached max photos
+                if (photoCount >= maxPhotos) {
+                    stopCapture();
+                    if (!data.should_train) {
+                        startTraining();
+                    }
+                }
+            } else {
+                console.error('Error saving photo:', data.error);
+                // Continue anyway, face might not be visible in some frames
+            }
+        } catch (error) {
+            console.error('Error sending photo:', error);
+        }
+    }
+
+    // Update progress bar
+    function updateProgress() {
+        const percentage = (photoCount / maxPhotos) * 100;
+        progressBar.style.width = percentage + '%';
+        progressBar.textContent = photoCount + ' / ' + maxPhotos;
+        statusText.textContent = `Capturing photos... ${photoCount}/${maxPhotos}`;
+        statusText.className = 'text-center mb-2 text-primary';
+    }
+
+    // Start capturing
+    function startCapture() {
+        photoCount = 0;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        statusText.textContent = 'Starting capture...';
+        statusText.className = 'text-center mb-2 text-primary';
+
+        // Capture a photo every 100ms
+        captureInterval = setInterval(capturePhoto, 100);
+    }
+
+    // Stop capturing
+    function stopCapture() {
+        if (captureInterval) {
+            clearInterval(captureInterval);
+            captureInterval = null;
+        }
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+    }
+
+    // Start model training
+    async function startTraining() {
+        statusText.textContent = 'Training model... Please wait...';
+        statusText.className = 'text-center mb-2 text-warning';
+
+        try {
+            const response = await fetch('/recognition/train/', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                statusText.textContent = `✓ Success! Captured ${photoCount} photos and trained model with ${data.num_images} images from ${data.num_students} students.`;
+                statusText.className = 'text-center mb-2 text-success';
+                progressBar.className = 'progress-bar bg-success';
+
+                // Show success message
+                setTimeout(() => {
+                    alert('Photos captured and model trained successfully! You can now use face recognition.');
+                }, 500);
+            } else {
+                statusText.textContent = 'Photos captured, but training failed: ' + data.error;
+                statusText.className = 'text-center mb-2 text-danger';
+            }
+        } catch (error) {
+            console.error('Error training model:', error);
+            statusText.textContent = 'Photos captured, but training request failed.';
+            statusText.className = 'text-center mb-2 text-danger';
+        }
+    }
+
+    // Event listeners
+    startBtn.addEventListener('click', startCapture);
+    stopBtn.addEventListener('click', stopCapture);
+
+    // Initialize webcam on page load
+    initWebcam();
+</script>
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+
+{% block title %}Train Model - Face Recognition System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8 mx-auto text-center">
+        <h2 class="text-white"><i class="bi bi-cpu-fill me-2"></i>Train Face Recognition Model</h2>
+        <p class="text-white">Train the AI model to recognize student faces</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <!-- Stats -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="stats-card">
+                    <h3>{{ total_students }}</h3>
+                    <p class="mb-0"><i class="bi bi-people-fill me-2"></i>Students with Photos</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="stats-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                    <h3>{{ training_models.count }}</h3>
+                    <p class="mb-0"><i class="bi bi-graph-up me-2"></i>Training Sessions</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Training Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-gear-fill me-2"></i>Start Training</h5>
+            </div>
+            <div class="card-body">
+                <p>Click the button below to train the face recognition model with captured student photos.</p>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    Make sure you have captured photo samples for at least one student before training.
+                </div>
+
+                <div id="training-status" class="mb-3" style="display: none;">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-hourglass-split me-2"></i>
+                        <span id="status-text">Training in progress... Please wait...</span>
+                    </div>
+                </div>
+
+                <button id="train-btn" type="button" class="btn btn-primary btn-lg w-100">
+                    <i class="bi bi-cpu-fill me-2"></i>Start Training
+                </button>
+            </div>
+        </div>
+
+        <!-- Training History -->
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Training History</h5>
+            </div>
+            <div class="card-body">
+                {% if training_models %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Students</th>
+                                <th>Images</th>
+                                <th>Accuracy</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for model in training_models %}
+                            <tr>
+                                <td>{{ model.trained_at|date:"M d, Y h:i A" }}</td>
+                                <td>{{ model.num_students }}</td>
+                                <td>{{ model.num_images }}</td>
+                                <td>
+                                    {% if model.accuracy %}
+                                    {{ model.accuracy|floatformat:1 }}%
+                                    {% else %}
+                                    N/A
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No training history yet. Train your first model!</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const trainBtn = document.getElementById('train-btn');
+    const trainingStatus = document.getElementById('training-status');
+    const statusText = document.getElementById('status-text');
+
+    trainBtn.addEventListener('click', async function () {
+        // Disable button
+        trainBtn.disabled = true;
+        trainBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Training...';
+
+        // Show status
+        trainingStatus.style.display = 'block';
+        statusText.textContent = 'Training in progress... This may take a few minutes...';
+
+        try {
+            const response = await fetch('/recognition/train/', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                trainingStatus.className = 'mb-3';
+                trainingStatus.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                   Training successful! Processed ${data.num_images} images from ${data.num_students} students.
+                </div>
+            `;
+                trainBtn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Training Complete!';
+                trainBtn.className = 'btn btn-success btn-lg w-100';
+
+                // Reload page after 2 seconds to show updated history
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                trainingStatus.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-x-circle-fill me-2"></i>
+                    Training failed: ${data.error}
+                </div>
+            `;
+                trainBtn.disabled = false;
+                trainBtn.innerHTML = '<i class="bi bi-cpu-fill me-2"></i>Try Again';
+                trainBtn.className = 'btn btn-danger btn-lg w-100';
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            trainingStatus.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-x-circle-fill me-2"></i>
+                Network error. Please try again.
+            </div>
+        `;
+            trainBtn.disabled = false;
+            trainBtn.innerHTML = '<i class="bi bi-cpu-fill me-2"></i>Try Again';
+            trainBtn.className = 'btn btn-danger btn-lg w-100';
+        }
+    });
+</script>
+{% endblock %}

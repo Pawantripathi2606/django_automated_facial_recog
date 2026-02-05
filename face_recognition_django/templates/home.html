@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - Face Recognition System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12 text-center">
+        <h1 class="display-4 fw-bold text-white mb-3">Face Recognition Attendance System</h1>
+        <p class="lead text-white">Automated attendance tracking using AI-powered face recognition</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="stats-card">
+            <div class="d-flex align-items-center">
+                <div class="flex-grow-1">
+                    <h3>{{ total_students }}</h3>
+                    <p class="mb-0"><i class="bi bi-people-fill me-2"></i>Total Students</p>
+                </div>
+                <i class="bi bi-people fs-1 opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stats-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+            <div class="d-flex align-items-center">
+                <div class="flex-grow-1">
+                    <h3>{{ students_with_photos }}</h3>
+                    <p class="mb-0"><i class="bi bi-camera-fill me-2"></i>Photos Captured</p>
+                </div>
+                <i class="bi bi-camera fs-1 opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stats-card" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);">
+            <div class="d-flex align-items-center">
+                <div class="flex-grow-1">
+                    <h3>{{ today_attendance }}</h3>
+                    <p class="mb-0"><i class="bi bi-check-circle-fill me-2"></i>Today's Attendance</p>
+                </div>
+                <i class="bi bi-check-circle fs-1 opacity-50"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-person-plus-fill fs-1 text-primary mb-3"></i>
+                <h5 class="card-title">Add Student</h5>
+                <p class="card-text text-muted">Register new student details</p>
+                <a href="{% url 'student_create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-lg me-1"></i>Add New
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-camera-fill fs-1 text-warning mb-3"></i>
+                <h5 class="card-title">Capture Photos</h5>
+                <p class="card-text text-muted">Take photo samples</p>
+                <a href="{% url 'student_list' %}" class="btn btn-warning text-white">
+                    <i class="bi bi-camera me-1"></i>Capture
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-cpu-fill fs-1 text-success mb-3"></i>
+                <h5 class="card-title">Train Model</h5>
+                <p class="card-text text-muted">Train face recognition AI</p>
+                <a href="{% url 'train_model_page' %}" class="btn btn-success">
+                    <i class="bi bi-gear-fill me-1"></i>Train
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-camera-video-fill fs-1 text-danger mb-3"></i>
+                <h5 class="card-title">Recognize Faces</h5>
+                <p class="card-text text-muted">Start face recognition</p>
+                <a href="{% url 'recognize_face' %}" class="btn btn-danger">
+                    <i class="bi bi-play-fill me-1"></i>Start
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Attendance -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Attendance</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_attendance %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Student ID</th>
+                                <th>Name</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for attendance in recent_attendance %}
+                            <tr>
+                                <td>{{ attendance.student.student_id }}</td>
+                                <td>{{ attendance.student.name }}</td>
+                                <td>{{ attendance.date }}</td>
+                                <td>{{ attendance.time|time:"h:i A" }}</td>
+                                <td>
+                                    <span class="badge bg-success">{{ attendance.get_status_display }}</span>
+                                </td>
+                                <td>{{ attendance.confidence|floatformat:1 }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No attendance records yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
