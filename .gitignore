@@ -43,6 +43,6 @@ db.sqlite3-journal
 .env
 *.env
 
-# Models and data
-classifier.xml
-/data/
+# Models and data (uncommenting to include in deployment)
+# classifier.xml
+# /data/
