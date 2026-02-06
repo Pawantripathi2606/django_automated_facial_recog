@@ -1,0 +1,2 @@
+# This file helps Railway detect this as a Python project
+# The actual requirements are in face_recognition_django/requirements.txt
