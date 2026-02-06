@@ -1,8 +1,5 @@
 [build]
 builder = "nixpacks"
-buildCommand = "cd face_recognition_django && pip install -r requirements.txt && python manage.py collectstatic --no-input"
 
 [deploy]
-startCommand = "cd face_recognition_django && gunicorn face_recognition_system.wsgi:application"
-restartPolicyType = "on-failure"
-restartPolicyMaxRetries = 10
+startCommand = "cd face_recognition_django && gunicorn face_recognition_system.wsgi:application --bind 0.0.0.0:$PORT"
