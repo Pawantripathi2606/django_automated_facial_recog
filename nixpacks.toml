@@ -1,11 +1,2 @@
 [phases.setup]
 aptPkgs = ["libgl1", "libglib2.0-0"]
-
-[phases.install]
-cmds = ["cd face_recognition_django && pip install -r requirements.txt"]
-
-[phases.build]
-cmds = ["cd face_recognition_django && python manage.py collectstatic --no-input"]
-
-[start]
-cmd = "cd face_recognition_django && gunicorn face_recognition_system.wsgi:application --bind 0.0.0.0:$PORT"
