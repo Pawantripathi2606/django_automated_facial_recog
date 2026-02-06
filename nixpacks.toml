@@ -1,9 +1,6 @@
-# Force rebuild - Updated at 2026-02-07T00:22:55
+# Force rebuild - Updated at 2026-02-07T00:25:00
 [phases.setup]
 aptPkgs = ["libgl1", "libglib2.0-0"]
 
-[phases.install]
-cmds = ["pip install -r face_recognition_django/requirements.txt"]
-
 [start]
-cmd = "cd face_recognition_django && python3 manage.py migrate && gunicorn face_recognition_system.wsgi:application --bind 0.0.0.0:$PORT"
+cmd = ". /opt/venv/bin/activate && cd face_recognition_django && python3 manage.py migrate && gunicorn face_recognition_system.wsgi:application --bind 0.0.0.0:$PORT"
